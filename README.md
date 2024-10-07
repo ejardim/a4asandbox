@@ -6,4 +6,6 @@
 - MCMC workflow
 - Ensembles workflow
 - Diagnostic's tools
-- 
+- Tools
+- Spatial components
+
