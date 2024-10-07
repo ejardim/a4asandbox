@@ -12,10 +12,11 @@
   - a4adiags?
   - retrospective (how to reduce ks)
 - Tools
-  - model choice
-    - separable test
-    - number of ks
-    - which spline
+  - extract fleet selectivity
+- model choice
+  - separable test
+  - number of ks
+  - which spline
 - Spatial components
 
 
