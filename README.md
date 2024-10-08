@@ -18,5 +18,6 @@
   - number of ks
   - which spline
 - Spatial components
-
+  - model recruitment wwith areas covariates log a ~ a0 + a1I1 + a2I2 where I are abundance indices and a coefficients
+  - include multifleet in the likelihood by allowing more fleets each with it's own catchability model or use the current formula to allow fleets to be included as covariates
 
