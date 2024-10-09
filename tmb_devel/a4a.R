@@ -11,6 +11,9 @@ data_a4a <- readRDS(file.path(rundir, "data.rds"))
 n.out <- read.table(file.path(rundir, "n.out"))
 logn.out <- log(n.out)
 
+q.out <- read.table(file.path(rundir, "q.out"))
+v.out <- read.table(file.path(rundir, "v.out"))
+
 
 data_old <- list(Y_old = rnorm(10) + 1:10, x_old = 1:10)
 parameters_old <- list(a_old = 0, b_old = 0, logSigma_old = 0)
@@ -26,12 +29,13 @@ data_new <- list(
   minAge = data_a4a$ages[1],
   nsurveys = length(coef(fit)$qmodel),
   surveyMinAges = data_a4a$survey_minages,
-  surveMaxAges = data_a4a$survey_maxages,
+  surveyMaxAges = data_a4a$survey_maxages,
   M = exp(t(matrix(data_a4a$aux$m, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1))),
   designF = Xs$fmodel,
   designQ = Xs$qmodel,
   designN1 = Xs$n1model,
-  designR = Xs$rmodel
+  designR = Xs$rmodel,
+  designV = Xs$vmodel
 )
 
 # set up pars
@@ -46,7 +50,7 @@ qpars <-
       lapply(coef(fit)$qmodel, function(x) x[drop = TRUE])
     )
   )
-
+vpars <- unlist(unname(coef(fit)$vmodel))
 
 #n_centering <- pars(fit)@stkmodel@centering[drop = TRUE]
 
@@ -55,7 +59,8 @@ parameters_new <- list(
   Fpar = unname(fpars),
   Qpar = unname(qpars),
   N1par = unname(n1pars),
-  Rpar = unname(rpars)
+  Rpar = unname(rpars),
+  Vpar = unname(vpars)
 )
 
 
@@ -73,26 +78,46 @@ obj$report()$logF
 obj$report()$logN1
 obj$report()$logR
 obj$report()$logN
+obj$report()$logQ
+obj$report()$logQ[1, , ]
+obj$report()$logQ[2, , ]
+obj$report()$logV[1, 1:2 , ]
+obj$report()$logV[2, 1:2, ]
+obj$report()$logV[3, 1:2, ]
 
-# check F
-range(
-  t(obj$report()$logF) - log(harvest(fit))[drop = TRUE]
-)
 
-# check N1
-range(
-  obj$report()$logN1 - logn.out[1, -1]
-)
+checks <-
+  list(
+    check_F =
+      range(
+        t(obj$report()$logF) - log(harvest(fit))[drop = TRUE]
+      ),
+    check_N1 =
+      range(
+        obj$report()$logN1 - logn.out[1, -1]
+      ), check_R =
+      range(
+        obj$report()$logR - logn.out[, 1]
+      ), check_N =
+      range(
+        obj$report()$logN - logn.out
+      ), check_Q =
+      range(
+        rbind(
+          obj$report()$logQ[1, , ],
+          obj$report()$logQ[2, , ]
+        ) - q.out
+      ), check_V =
+      range(
+        rbind(
+          obj$report()$logV[1, , ],
+          obj$report()$logV[2, , ],
+          obj$report()$logV[3, , ]
+        ) - v.out
+      )
+  )
 
-# check R
-range(
-  obj$report()$logR - logn.out[, 1]
-)
-
-# check N
-range(
-  obj$report()$logN - logn.out
-)
-
+checks
+range(checks)
 
 saveRDS(opt, "a4a_opt.rds")

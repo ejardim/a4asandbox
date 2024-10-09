@@ -22,17 +22,19 @@ Type objective_function<Type>::operator()()
   DATA_MATRIX(designQ)
   DATA_MATRIX(designN1)
   DATA_MATRIX(designR)
+  DATA_MATRIX(designV)
 
   int nobs = obs.size();
   int nrow = M.rows();
   int ncol = M.cols();
-  int nsurveys = surveyMinAge.size();
+  int nsurvey = surveyMinAges.size();
 
   //PARAMETER_MATRIX(logN)
   PARAMETER_VECTOR(Fpar)
   PARAMETER_VECTOR(Qpar)
   PARAMETER_VECTOR(N1par)
   PARAMETER_VECTOR(Rpar)
+  PARAMETER_VECTOR(Vpar)
 
   PARAMETER(a_old);
   PARAMETER(b_old);
@@ -56,11 +58,30 @@ Type objective_function<Type>::operator()()
   vector<Type> expandedQ(nobs);
   expandedQ = designQ * Qpar;
   array<Type> logQ(nsurvey, nrow, ncol);
-  for (int y = 0; y < nrow; ++y)
+  for (int s = 0; s < nsurvey; ++s)
   {
-    for (int a = 0; a < ncol; ++a)
+    for (int y = 0; y < nrow; ++y)
     {
-      logF(y, a) = expandedF(y * ncol + a);
+      for (int a = 0; a < ncol; ++a)
+      {
+        logQ(s, y, a) = expandedQ(s * nrow * ncol + y * ncol + a);
+      }
+    }
+  }
+
+  /// expand V - block diagonal design matrix
+  /// one block for each fleet + survey
+  vector<Type> expandedV(nobs);
+  expandedV = designV * Vpar;
+  array<Type> logV(nsurvey + 1, nrow, ncol);
+  for (int s = 0; s < nsurvey + 1; ++s)
+  {
+    for (int y = 0; y < nrow; ++y)
+    {
+      for (int a = 0; a < ncol; ++a)
+      {
+        logV(s, y, a) = expandedV(s * nrow * ncol + y * ncol + a);
+      }
     }
   }
 
@@ -106,8 +127,8 @@ Type objective_function<Type>::operator()()
   int y, a;//, f;
   for (int i = 0; i < nobs; ++i)
   {
-    y = aux(i, 0) - minYear;
-    //f = aux(i, 1) - 1;
+    f = aux(i, 0) - 1;
+    y = aux(i, 1) - minYear;
     a = aux(i, 2) - minAge;
     Z = exp(logF(y, a)) + M(y, a);
 
@@ -119,7 +140,8 @@ Type objective_function<Type>::operator()()
   REPORT(logN1);
   REPORT(logR);
   REPORT(logN);
-  REPORT(expandedQ);
+  REPORT(logQ);
+  REPORT(logV);
 
   /* End new a4a */
 
