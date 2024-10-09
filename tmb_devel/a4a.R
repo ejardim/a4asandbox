@@ -1,4 +1,5 @@
 library(TMB)
+library(FLa4a)
 
 rundir <- "../colin_local/runs/run"
 # get data
@@ -10,10 +11,9 @@ data_a4a <- readRDS(file.path(rundir, "data.rds"))
 n.out <- read.table(file.path(rundir, "n.out"))
 logn.out <- log(n.out)
 
+
 data_old <- list(Y_old = rnorm(10) + 1:10, x_old = 1:10)
 parameters_old <- list(a_old = 0, b_old = 0, logSigma_old = 0)
-
-
 
 aux <- data_a4a$obs[c("year", "fleet", "age")]
 aux <- as.matrix(aux)
@@ -24,8 +24,12 @@ data_new <- list(
   aux = aux,
   minYear = data_a4a$years[1],
   minAge = data_a4a$ages[1],
+  nsurveys = length(coef(fit)$qmodel),
+  surveyMinAges = data_a4a$survey_minages,
+  surveMaxAges = data_a4a$survey_maxages,
   M = exp(t(matrix(data_a4a$aux$m, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1))),
   designF = Xs$fmodel,
+  designQ = Xs$qmodel,
   designN1 = Xs$n1model,
   designR = Xs$rmodel
 )
@@ -36,12 +40,20 @@ pars <- coef(fit)$stkmodel[drop = TRUE]
 fpars <- pars[grepl("fMod", names(pars))]
 n1pars <- pars[grepl("n1Mod", names(pars))]
 rpars <- pars[grepl("rMod", names(pars))]
+qpars <-
+  unlist(
+    unname(
+      lapply(coef(fit)$qmodel, function(x) x[drop = TRUE])
+    )
+  )
+
 
 #n_centering <- pars(fit)@stkmodel@centering[drop = TRUE]
 
 parameters_new <- list(
   # Fpar = rep(0, ncol(Xs$fmodel))
   Fpar = unname(fpars),
+  Qpar = unname(qpars),
   N1par = unname(n1pars),
   Rpar = unname(rpars)
 )

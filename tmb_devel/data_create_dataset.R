@@ -14,6 +14,21 @@ type <- gsub(glue("{stock}_|[.]rds"), "", files)
 stk <- lapply(files, function(x) readRDS(file.path(stkdir, x)))
 names(stk) <- type
 
+if (TRUE) {
+  data(ple4)
+  data(ple4.indices)
+
+  fmodel <- ~ factor(age) + factor(year)
+  qmodel <- list(~ factor(age), ~ factor(age))
+  ple4.fit <- sca(fmodel = fmodel, qmodel = qmodel, stock = ple4, indices = ple4.indices[2:3])
+
+  stk <- list(
+    stk = ple4,
+    idx = ple4.indices[2:3],
+    fit = ple4.fit
+  )
+}
+
 wkdir <- "colin_local/runs/run"
 unlink(wkdir, recursive = TRUE)
 

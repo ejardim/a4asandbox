@@ -14,18 +14,23 @@ Type objective_function<Type>::operator()()
 
   DATA_INTEGER(minYear)
   DATA_INTEGER(minAge)
+  DATA_IVECTOR(surveyMinAges)
+  DATA_IVECTOR(surveyMaxAges)
   DATA_MATRIX(M)
 
   DATA_MATRIX(designF)
+  DATA_MATRIX(designQ)
   DATA_MATRIX(designN1)
   DATA_MATRIX(designR)
 
   int nobs = obs.size();
   int nrow = M.rows();
   int ncol = M.cols();
+  int nsurveys = surveyMinAge.size();
 
   //PARAMETER_MATRIX(logN)
   PARAMETER_VECTOR(Fpar)
+  PARAMETER_VECTOR(Qpar)
   PARAMETER_VECTOR(N1par)
   PARAMETER_VECTOR(Rpar)
 
@@ -38,6 +43,19 @@ Type objective_function<Type>::operator()()
   expandedF = designF * Fpar;
 
   matrix<Type> logF(nrow, ncol);
+  for (int y = 0; y < nrow; ++y)
+  {
+    for (int a = 0; a < ncol; ++a)
+    {
+      logF(y, a) = expandedF(y * ncol + a);
+    }
+  }
+
+  /// expand Q - block diagonal design matrix
+  /// one block for each survey
+  vector<Type> expandedQ(nobs);
+  expandedQ = designQ * Qpar;
+  array<Type> logQ(nsurvey, nrow, ncol);
   for (int y = 0; y < nrow; ++y)
   {
     for (int a = 0; a < ncol; ++a)
@@ -101,6 +119,7 @@ Type objective_function<Type>::operator()()
   REPORT(logN1);
   REPORT(logR);
   REPORT(logN);
+  REPORT(expandedQ);
 
   /* End new a4a */
 
