@@ -74,6 +74,7 @@ read.data <- function() {
   nsurveys <- get.line(file, 7)
   survey_minages <- get.line(file, 9)
   survey_maxages <- get.line(file, 11)
+  survey_times <- get.line(file, 13)
 
 
   noobs <- get.line(file, 19)
@@ -90,6 +91,7 @@ read.data <- function() {
     nsurveys = nsurveys,
     survey_minages = survey_minages,
     survey_maxages = survey_maxages,
+    survey_times = survey_times,
     obs = obs,
     aux = aux
   )

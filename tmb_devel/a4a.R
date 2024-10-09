@@ -24,12 +24,14 @@ aux <- as.matrix(aux)
 
 data_new <- list(
   obs = data_a4a$obs$observation,
-  aux = aux,
+  aux = as.matrix(data_a4a$obs[1:3]),
   minYear = data_a4a$years[1],
   minAge = data_a4a$ages[1],
   nsurveys = length(coef(fit)$qmodel),
   surveyMinAges = data_a4a$survey_minages,
   surveyMaxAges = data_a4a$survey_maxages,
+  fleetTypes = c(1, rep(2, length(data_a4a$survey_minages))),
+  sampleTimes = data_a4a$survey_times,
   M = exp(t(matrix(data_a4a$aux$m, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1))),
   designF = Xs$fmodel,
   designQ = Xs$qmodel,
@@ -85,6 +87,7 @@ obj$report()$logV[1, 1:2 , ]
 obj$report()$logV[2, 1:2, ]
 obj$report()$logV[3, 1:2, ]
 
+plot(obj$report()$logPred, data$obs)
 
 checks <-
   list(
@@ -114,10 +117,22 @@ checks <-
           obj$report()$logV[2, , ],
           obj$report()$logV[3, , ]
         ) - v.out
-      )
+      ),
+    check_hand_ll =
+          sum(
+            dnorm(
+              data$obs,
+              obj$report()$logPred,
+              obj$report()$logObsSd,
+              log = TRUE
+            )
+          ) -logLik(fit),
+      check_tmb_ll = -obj$report()$nll - logLik(fit)
   )
 
+
 checks
+
 range(checks)
 
 saveRDS(opt, "a4a_opt.rds")

@@ -16,6 +16,8 @@ Type objective_function<Type>::operator()()
   DATA_INTEGER(minAge)
   DATA_IVECTOR(surveyMinAges)
   DATA_IVECTOR(surveyMaxAges)
+  DATA_IVECTOR(fleetTypes)
+  DATA_VECTOR(sampleTimes)
   DATA_MATRIX(M)
 
   DATA_MATRIX(designF)
@@ -123,19 +125,43 @@ Type objective_function<Type>::operator()()
   /// obs part
 
   vector<Type> logPred(nobs);
+  vector<Type> logObsSd(nobs);
+
   Type Z;
-  int y, a;//, f;
+  int y, a, f;
   for (int i = 0; i < nobs; ++i)
   {
     f = aux(i, 0) - 1;
     y = aux(i, 1) - minYear;
     a = aux(i, 2) - minAge;
     Z = exp(logF(y, a)) + M(y, a);
+    logObsSd(i) = exp(logV(f, y, a));
+    switch (fleetTypes(f))
+    {
+    case 1:
+      logPred(i) = logN(y, a) - log(Z) + log(1 - exp(-Z)) + logF(y, a);
+      break;
 
-    logPred(i) = logN(y, a) - log(Z) + log(1 - exp(-Z)) + logF(y, a);
+    case 2:
+      logPred(i) = logQ(f - 1, y, a) + logN(y, a) - Z * sampleTimes(f - 1);
+      break; // f - 1, because there is one commercial fleet
+
+    default:
+      std::cout << "Error: This fleet type not implemented yet." << std::endl;
+      exit(EXIT_FAILURE);
+      break;
+    }
+
   }
 
+  /// likelihood
+  Type nll = 0;
+  nll = - sum(dnorm(obs, logPred, logObsSd, true));
+  // calc by fleet
+
+  REPORT(nll);
   REPORT(logPred);
+  REPORT(logObsSd);
   REPORT(logF);
   REPORT(logN1);
   REPORT(logR);
