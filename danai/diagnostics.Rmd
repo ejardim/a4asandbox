@@ -1,0 +1,43 @@
+---
+title: "Untitled"
+author: "Danai"
+date: "2024-10-08"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Residuals
+
+- Rest of the residuals
+
+### Runs test 
+  Runs test checks weather the residuals are randomly distributed. A "run" is a sequence of the same sign residuals. Few runs indicate a trend or a correlation in the residuals while too many runs may suggest overfitting. 
+  The primary output of a runstest is a p-value where:
+  
+- A high p value $(p\leq0.05)$ suggests that the residuals are randomly distributed
+- A low p value indicates a non-random pattern in the residuals
+
+```{r libraries}
+library(FLa4a)
+library(FLCore)
+library(a4adiags)
+library(ggplot2);theme_set(theme_bw())
+
+fit05 <- sca(mut09, mut09.idx, fmod = ~factor(age) + s(year, k = 8), qmod = list(~s(age,
+k = 3)), srmod = ~factor(year), vmod = list(~1, ~1), n1mod = ~1)
+res05 <- residuals(fit05, mut09, mut09.idx)
+```
+
+```{r}
+plot(res05)
+plotRunstest(fit05, mut09.idx, combine = F) + theme_bw() + facet_wrap(~age)
+plotRunstest(catch.n(mut09), catch.n(mut09 + fit05), combine = F) + theme_bw() + facet_wrap(~age)
+```
+
+Green shading indicates no evidence (p ≥ 0.05) and red shading evidence (p < 0.05) to reject the hypothesis of a randomly distributed time-series of residuals, respectively. The shaded (green/red) area spans three residual standard deviations to either side from zero, and the red points outside of the shading violate the ‘ $3\sigma$ limit’ for that series.
+
