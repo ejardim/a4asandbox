@@ -3,11 +3,6 @@
 template <class Type>
 Type objective_function<Type>::operator()()
 {
-  /* Minimal example */
-  DATA_VECTOR(Y_old);
-  DATA_VECTOR(x_old);
-
-  /* Begin new a4a */
 
   DATA_VECTOR(obs)
   DATA_IMATRIX(aux)
@@ -37,10 +32,6 @@ Type objective_function<Type>::operator()()
   PARAMETER_VECTOR(N1par)
   PARAMETER_VECTOR(Rpar)
   PARAMETER_VECTOR(Vpar)
-
-  PARAMETER(a_old);
-  PARAMETER(b_old);
-  PARAMETER(logSigma_old);
 
   /// expand F
   vector<Type> expandedF(nobs);
@@ -155,11 +146,17 @@ Type objective_function<Type>::operator()()
   }
 
   /// likelihood
-  Type nll = 0;
-  nll = - sum(dnorm(obs, logPred, logObsSd, true));
-  // calc by fleet
+  vector<Type> nllpart(nsurvey+1);
+  for (int i = 0; i < nobs; ++i)
+  {
+    f = aux(i, 0) - 1;
+    nllpart(f) += -dnorm(obs(i), logPred(i), logObsSd(i), true);
+  }
+  Type jnll = -sum(dnorm(obs, logPred, logObsSd, true));
 
-  REPORT(nll);
+
+  REPORT(jnll);
+  REPORT(nllpart)
   REPORT(logPred);
   REPORT(logObsSd);
   REPORT(logF);
@@ -169,11 +166,7 @@ Type objective_function<Type>::operator()()
   REPORT(logQ);
   REPORT(logV);
 
-  /* End new a4a */
-
-  Type f_old = -sum(dnorm(Y_old, a_old + b_old * x_old, exp(logSigma_old), true));
-
-  return f_old;
+  return jnll;
 
   /* Quick Reference
      ===============

@@ -66,16 +66,36 @@ parameters_new <- list(
 )
 
 
-data <- c(data_old, data_new)
-parameters <- c(parameters_new, parameters_old)
+#data <- c(data_old, data_new)
+#parameters <- c(parameters_new, parameters_old)
+data <- data_new
+#parameters <- parameters_new
+parameters <- lapply(parameters_new, function(x) rep(0, length(x)))
 
 # compile and load
 compile("a4a.cpp")
 dyn.load(dynlib("a4a"))
-obj <- MakeADFun(data, parameters, DLL = "a4a")
+obj <-
+  MakeADFun(
+    data, parameters,
+    #random = c("Rpar"),
+    DLL = "a4a",
+    #map = list(logsdF = as.factor(rep(0, length(par$logsdF)))),
+    silent = FALSE
+  )
 
-opt <- do.call("optim", obj)
+# obj$fn()
 
+opt <-
+  nlminb(
+    obj$par, obj$fn, obj$gr,
+    control = list(eval.max = 10000, iter.max = 10000)
+  )
+
+obj$report()$jnll
+obj$report()$nllpart
+
+if (FALSE) {
 obj$report()$logF
 obj$report()$logN1
 obj$report()$logR
@@ -86,6 +106,8 @@ obj$report()$logQ[2, , ]
 obj$report()$logV[1, 1:2 , ]
 obj$report()$logV[2, 1:2, ]
 obj$report()$logV[3, 1:2, ]
+obj$report()$jnll
+}
 
 plot(obj$report()$logPred, data$obs)
 
@@ -127,11 +149,13 @@ checks <-
               log = TRUE
             )
           ) -logLik(fit),
-      check_tmb_ll = -obj$report()$nll - logLik(fit)
+    check_tmb_ll = -obj$report()$jnll - logLik(fit),
+    check_jnll = fitSumm(fit)[grep("nlogl", dimnames(fitSumm(fit))[[1]]), ] - c(obj$report()$jnll, obj$report()$nllpart)
   )
 
 
 checks
+
 
 range(checks)
 
