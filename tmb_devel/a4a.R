@@ -1,0 +1,162 @@
+library(TMB)
+library(FLa4a)
+
+rundir <- "../colin_local/runs/run"
+# get data
+Xs <- readRDS(file.path(rundir, "modelmatrices.rds"))
+fit <- readRDS(file.path(rundir, "fit.rds"))
+data_a4a <- readRDS(file.path(rundir, "data.rds"))
+
+# get a4a results
+n.out <- read.table(file.path(rundir, "n.out"))
+logn.out <- log(n.out)
+
+q.out <- read.table(file.path(rundir, "q.out"))
+v.out <- read.table(file.path(rundir, "v.out"))
+
+
+data_old <- list(Y_old = rnorm(10) + 1:10, x_old = 1:10)
+parameters_old <- list(a_old = 0, b_old = 0, logSigma_old = 0)
+
+aux <- data_a4a$obs[c("year", "fleet", "age")]
+aux <- as.matrix(aux)
+
+
+data_new <- list(
+  obs = data_a4a$obs$observation,
+  aux = as.matrix(data_a4a$obs[1:3]),
+  minYear = data_a4a$years[1],
+  minAge = data_a4a$ages[1],
+  nsurveys = length(coef(fit)$qmodel),
+  surveyMinAges = data_a4a$survey_minages,
+  surveyMaxAges = data_a4a$survey_maxages,
+  fleetTypes = c(1, rep(2, length(data_a4a$survey_minages))),
+  sampleTimes = data_a4a$survey_times,
+  M = exp(t(matrix(data_a4a$aux$m, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1))),
+  designF = Xs$fmodel,
+  designQ = Xs$qmodel,
+  designN1 = Xs$n1model,
+  designR = Xs$rmodel,
+  designV = Xs$vmodel
+)
+
+# set up pars
+
+pars <- coef(fit)$stkmodel[drop = TRUE]
+fpars <- pars[grepl("fMod", names(pars))]
+n1pars <- pars[grepl("n1Mod", names(pars))]
+rpars <- pars[grepl("rMod", names(pars))]
+qpars <-
+  unlist(
+    unname(
+      lapply(coef(fit)$qmodel, function(x) x[drop = TRUE])
+    )
+  )
+vpars <- unlist(unname(coef(fit)$vmodel))
+
+#n_centering <- pars(fit)@stkmodel@centering[drop = TRUE]
+
+parameters_new <- list(
+  # Fpar = rep(0, ncol(Xs$fmodel))
+  Fpar = unname(fpars),
+  Qpar = unname(qpars),
+  N1par = unname(n1pars),
+  Rpar = unname(rpars),
+  Vpar = unname(vpars)
+)
+
+
+#data <- c(data_old, data_new)
+#parameters <- c(parameters_new, parameters_old)
+data <- data_new
+#parameters <- parameters_new
+parameters <- lapply(parameters_new, function(x) rep(0, length(x)))
+
+# compile and load
+compile("a4a.cpp")
+dyn.load(dynlib("a4a"))
+obj <-
+  MakeADFun(
+    data, parameters,
+    #random = c("Rpar"),
+    DLL = "a4a",
+    #map = list(logsdF = as.factor(rep(0, length(par$logsdF)))),
+    silent = FALSE
+  )
+
+# obj$fn()
+
+opt <-
+  nlminb(
+    obj$par, obj$fn, obj$gr,
+    control = list(eval.max = 10000, iter.max = 10000)
+  )
+
+obj$report()$jnll
+obj$report()$nllpart
+
+if (FALSE) {
+obj$report()$logF
+obj$report()$logN1
+obj$report()$logR
+obj$report()$logN
+obj$report()$logQ
+obj$report()$logQ[1, , ]
+obj$report()$logQ[2, , ]
+obj$report()$logV[1, 1:2 , ]
+obj$report()$logV[2, 1:2, ]
+obj$report()$logV[3, 1:2, ]
+obj$report()$jnll
+}
+
+plot(obj$report()$logPred, data$obs)
+
+checks <-
+  list(
+    check_F =
+      range(
+        t(obj$report()$logF) - log(harvest(fit))[drop = TRUE]
+      ),
+    check_N1 =
+      range(
+        obj$report()$logN1 - logn.out[1, -1]
+      ), check_R =
+      range(
+        obj$report()$logR - logn.out[, 1]
+      ), check_N =
+      range(
+        obj$report()$logN - logn.out
+      ), check_Q =
+      range(
+        rbind(
+          obj$report()$logQ[1, , ],
+          obj$report()$logQ[2, , ]
+        ) - q.out
+      ), check_V =
+      range(
+        rbind(
+          obj$report()$logV[1, , ],
+          obj$report()$logV[2, , ],
+          obj$report()$logV[3, , ]
+        ) - v.out
+      ),
+    check_hand_ll =
+          sum(
+            dnorm(
+              data$obs,
+              obj$report()$logPred,
+              obj$report()$logObsSd,
+              log = TRUE
+            )
+          ) -logLik(fit),
+    check_tmb_ll = -obj$report()$jnll - logLik(fit),
+    check_jnll = fitSumm(fit)[grep("nlogl", dimnames(fitSumm(fit))[[1]]), ] - c(obj$report()$jnll, obj$report()$nllpart)
+  )
+
+
+checks
+
+
+range(checks)
+
+saveRDS(opt, "a4a_opt.rds")
