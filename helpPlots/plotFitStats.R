@@ -30,7 +30,7 @@ plotFitStats <- function(fits){
   par(new = TRUE)
   plot(df$fit, df$BIC, type = "b", col = "red", 
        ylim = c(0.75*min(df$BIC), 1.25*max(df$BIC)), axes = FALSE, xlab = "", ylab = "")
-  # axis(4)                
+  axis(4)                
   # mtext("y2 values", side = 4, line = 3)
   abline(v=df[min(df$GCV)==df$GCV,]$fit, col = "blue",lty = 2)
   abline(v=df[min(df$BIC)==df$BIC,]$fit, col = "red",lty = 2)
@@ -39,4 +39,4 @@ plotFitStats <- function(fits){
   
 }
 
-plotStats(fitsk)
+plotFitStats(fitsk)
