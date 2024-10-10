@@ -1,0 +1,22 @@
+#fmod, a formula object depicting the model for log fishing mortality at age
+fmod <- ~factor(replace(age, age > 6, 6)) + factor(year)  
+
+#srmod a formula object depicting the model for log recruitment
+srmod <- ~factor(year) #this stock-recruitment model (srmod) is 'free'; i.e. there is no restriction on the estimated recruitment, based on the SSB. 
+
+#qmod a list of formula objects depicting the models for log survey catchability at age
+qmod <- list(~I(1/(1 + exp(-age))))
+
+fit0 <- sca(stock,tun.sel[c(1)],fmodel=fmod,qmodel=qmod,srmodel=srmod)
+
+stk0 <- stock + fit0
+
+ridx01 <- stk0@stock.n[1]*0.7*0.001
+ridx01 <- ridx01 + rlnorm(ridx01)
+ridx02 <- stk0@stock.n[1]*0.3*0.001
+ridx02 <- ridx02 + rlnorm(ridx02)
+
+srmod <- ~ bevholt(a=~ridx01+ridx02, CV=0.01)
+cvar <- FLQuants(ridx01 = ridx01, ridx02 = ridx02)
+fit01 <- sca(stock,tun.sel[c(1)],fmodel=fmod,qmodel=qmod, srmodel=srmod, covar=cvar)
+

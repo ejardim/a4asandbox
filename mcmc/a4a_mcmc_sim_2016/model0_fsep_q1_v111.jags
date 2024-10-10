@@ -1,0 +1,122 @@
+#tau<- precisiones
+
+model{
+
+##F, seprable assumption F[y,a]=f[y]*s[a]
+
+for(y in 1:Y){
+for(a in 1:A){
+
+F[y,a]<-fy[y]*sa[a]
+Z[y,a]<-F[y,a]+M[a]
+}
+}
+
+##Recruitment
+
+#Priors for N first row and column##
+for(y in 1:(Y+1)) {
+N[y,1]~dlnorm(logmu.sr,tau.sr) }
+for(a in 2:(A)) {
+N[1,a]~dlnorm(logmu.n1,tau.n1)}
+
+
+##Population dinamics
+
+for(y in 2:(Y+1)){
+
+#eq supervivencia
+for(a in 2:(A-1)){N[y,a]<-N[y-1,a-1]*exp(-Z[y-1,a-1])}
+
+N[y,A]<-N[y-1,A-1]*exp(-Z[y-1,A-1]) +N[y-1,A]*exp(-Z[y-1,A])
+}
+
+
+##Observation equations
+
+#catch equation
+
+for(y in 1:Y){
+
+for(a in 1:A) {
+logmu.C[y,a]<-log(N[y,a]*(1-exp(-Z[y,a]))*F[y,a]/Z[y,a])}
+
+#lognormal prior
+for(a in 1:A){C[y,a]~dlnorm(logmu.C[y,a],tau.C)
+reslogC[y,a]<-log(C[y,a])-logmu.C[y,a]/(sqrt(tau.C))
+}
+
+}
+
+##SSB for bioman index
+
+for(y in 1:Y){for(a in 1:A){ 
+tons[y,a]<-N[y,a]*exp(-Z[y,a]*t_depm)*WC[y,a]*mat[a]
+tons2[y,a]<-N[y,a]*WC[y,a]*mat[a]}
+#tons[y,a]<-N[y,a]*exp(-(F[y,a]*h.spwn[y,a]+M[a]*m.spwn[a]))*WC[y,a]*mat[a]} #real SSB
+
+}
+
+for(y in 1:Y){SSB[y]<-sum(tons[y,1:A])}
+for(y in 1:Y){ssb[y]<-sum(tons2[y,1:A])}
+
+
+#Pelgas acoustic index
+ 
+for(y in 1:Y){
+for(a in 2:A){
+
+ 
+logmu.Iac[y,a-1]<-log(N[y,a]*exp(-Z[y,a]*t_ac)*qac)
+Iac[y,a-1]~dlnorm(logmu.Iac[y,a-1],tau.Iac)
+reslogIac[y,a-1]<-(log(Iac[y,a-1])-logmu.Iac[y,a-1])/sqrt(tau.Iac)
+
+}
+
+#Bioman DEPM index
+
+logmu.Idepm[y]<-log(SSB[y]*qdepm)
+Idepm[y]~dlnorm(logmu.Idepm[y],tau.Idepm)
+reslogIdepm[y]<-(log(Idepm[y])-logmu.Idepm[y])/sqrt(tau.Idepm)
+}
+
+
+
+
+###PRIORS
+
+for(y in 1:Y){ fy[y]~dlnorm(logmu.f,tau.f)}
+
+#fix s[refage]=1 otherwise identifiability problems between fy and sa
+sa[refage]<-1 
+for(a in 1:(refage-1)){sa[a]~dlnorm(logmu.f,tau.f)}
+for(a in (refage+1):A){sa[a]~dlnorm(logmu.s,tau.s)}
+
+
+qdepm~dlnorm(logmu.qdepm,tau.qdepm)
+qac~dlnorm(logmu.qac,tau.qac)
+
+tau.Idepm~dgamma(a.Idepm,b.Idepm)
+tau.C~dgamma(a.C,b.C)
+tau.Iac~dgamma(a.Iac,b.Iac)
+
+
+#######to save#################
+for(y in 1:Y){
+for(a in 1:(A-1)){
+muIac[y,a]<-exp(logmu.Iac[y,a])}
+
+for(a in 1:A){
+muC[y,a]<-exp(logmu.C[y,a])
+
+}
+muIdepm[y]<-exp(logmu.Idepm[y])
+rec[y]<-N[y,1]
+}
+
+for(a in 1:A){
+N0[a]<-N[1,a]
+}
+
+}
+
