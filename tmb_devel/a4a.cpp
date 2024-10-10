@@ -1,10 +1,27 @@
 #include <TMB.hpp>
 
 template <class Type>
+vector<Type> ssbFUN(matrix<Type> logN, matrix<Type> logF, matrix<Type> M, matrix<Type> SW, matrix<Type> MO, matrix<Type> PF, matrix<Type> PM)
+{
+  int nrow = logN.rows();
+  int ncol = logN.cols();
+  vector<Type> ret(nrow);
+  ret.setZero();
+  for (int y = 0; y < nrow; ++y)
+  {
+    for (int a = 0; a < ncol; ++a)
+    {
+      ret(y) += SW(y, a) * MO(y, a) * exp(logN(y, a)) * exp(-PF(y, a) * exp(logF(y, a)) - PM(y, a) * M(y, a));
+    }
+  }
+  return ret;
+}
+
+template <class Type>
 Type objective_function<Type>::operator()()
 {
 
-  DATA_VECTOR(obs)
+  DATA_VECTOR(logObs)
   DATA_IMATRIX(aux)
 
   DATA_INTEGER(minYear)
@@ -13,18 +30,32 @@ Type objective_function<Type>::operator()()
   DATA_IVECTOR(surveyMaxAges)
   DATA_IVECTOR(fleetTypes)
   DATA_VECTOR(sampleTimes)
+
   DATA_MATRIX(M)
+  DATA_MATRIX(SW)
+  DATA_MATRIX(MO)
+  DATA_MATRIX(PF)
+  DATA_MATRIX(PM)
 
   DATA_MATRIX(designF)
   DATA_MATRIX(designQ)
   DATA_MATRIX(designN1)
   DATA_MATRIX(designR)
   DATA_MATRIX(designV)
+  DATA_MATRIX(designRa)
+  DATA_MATRIX(designRb)
 
-  int nobs = obs.size();
+  // What model are we working with:
+  DATA_INTEGER(RmodelId)
+  DATA_SCALAR(srCV)
+  DATA_SCALAR(spr0)
+
+  // data summaries
+  int nobs = logObs.size();
   int nrow = M.rows();
   int ncol = M.cols();
   int nsurvey = surveyMinAges.size();
+  int hasSRR = srCV > 0;
 
   //PARAMETER_MATRIX(logN)
   PARAMETER_VECTOR(Fpar)
@@ -32,6 +63,8 @@ Type objective_function<Type>::operator()()
   PARAMETER_VECTOR(N1par)
   PARAMETER_VECTOR(Rpar)
   PARAMETER_VECTOR(Vpar)
+  PARAMETER_VECTOR(Rapar)
+  PARAMETER_VECTOR(Rbpar)
 
   /// expand F
   vector<Type> expandedF(nobs);
@@ -113,6 +146,9 @@ Type objective_function<Type>::operator()()
     }
   }
 
+  /// ssb
+  vector<Type> ssb = ssbFUN(logN, logF, M, SW, MO, PF, PM);
+
   /// obs part
 
   vector<Type> logPred(nobs);
@@ -146,14 +182,78 @@ Type objective_function<Type>::operator()()
   }
 
   /// likelihood
-  vector<Type> nllpart(nsurvey+1);
+  vector<Type> nllpart(nsurvey + 2);
+  for (int i = 0; i < nllpart.size(); ++i)
+  {
+    nllpart(i) = 0;
+  }
   for (int i = 0; i < nobs; ++i)
   {
     f = aux(i, 0) - 1;
-    nllpart(f) += -dnorm(obs(i), logPred(i), logObsSd(i), true);
+    nllpart(f) += -dnorm(logObs(i), logPred(i), logObsSd(i), true);
   }
-  Type jnll = -sum(dnorm(obs, logPred, logObsSd, true));
+  Type jnll = -sum(dnorm(logObs, logPred, logObsSd, true));
 
+  /// sr model penalty
+  if (hasSRR == 1)
+  {
+    // expand Ra and Rb
+    vector<Type> logRa(nobs);
+    logRa = designRa * Rapar;
+
+    vector<Type> logRb(nobs);
+    logRb = designRb * Rbpar;
+
+    // careful with geomean! it uses all years
+    vector<Type> predLogR(nrow - minAge);
+    vector<Type> obsLogR(nrow - minAge);
+
+    vector<Type> h = exp(logRa) / (1 + exp(logRa)) * 0.8 + 0.2;
+    vector<Type> v = exp(logRb);
+
+    Type varSDPredR = pow(log(pow(srCV, 2) + 1), 0.5);
+
+    for (int y = minAge; y < nrow; ++y)
+    {
+      obsLogR(y - minAge) = logR(y);
+      switch (RmodelId)
+      {
+      case 1:
+        // beverton holt
+        predLogR(y-minAge) = logRa(y) + log(ssb(y - minAge)) - log(exp(logRb(y)) + ssb(y - minAge));
+        break;
+
+      case 2:
+        // ricker
+        predLogR(y - minAge) = logRa(y) + log(ssb(y - minAge)) - exp(logRb(y)) * ssb(y - minAge);
+        break;
+
+      case 3:
+        // smooth hockey stick (Mesnil and Rochet, gamma = 0.1)
+        predLogR(y - minAge) = logRa(y) + log(ssb(y - minAge) + sqrt(exp(2.0 * logRb(y)) + 0.0025) - sqrt(pow(ssb(y - minAge) - exp(logRb(y)), 2.0) + 0.0025));
+        break;
+
+      case 4:
+        // geometric mean
+        predLogR(y - minAge) = logRa(y);
+        break;
+
+      case 5:
+        // bevholt with steepness: ra is a transform of h; rb is a transform of v
+        // spr0 is provided by user
+        predLogR(y - minAge) = log(6 * h(y) * v(y) * ssb(y - minAge)) - log(spr0 * ((h(y) + 1) * v(y) + (5 * h(y) - 1) * ssb(y - minAge)));
+        break;
+
+      default :
+        std::cout
+            << "Stock recruitment code not implemented yet." << std::endl;
+        exit(EXIT_FAILURE);
+        break;
+      }
+    }
+    nllpart(nsurvey + 1) = -sum(dnorm(obsLogR, predLogR, varSDPredR, true));
+    jnll += -sum(dnorm(obsLogR, predLogR, varSDPredR, true));
+  }
 
   REPORT(jnll);
   REPORT(nllpart)
@@ -165,6 +265,7 @@ Type objective_function<Type>::operator()()
   REPORT(logN);
   REPORT(logQ);
   REPORT(logV);
+  REPORT(ssb);
 
   return jnll;
 
