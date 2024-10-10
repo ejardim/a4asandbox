@@ -5,6 +5,8 @@ rundir <- "../colin_local/runs/run"
 # get data
 Xs <- readRDS(file.path(rundir, "modelmatrices.rds"))
 fit <- readRDS(file.path(rundir, "fit.rds"))
+stk <- readRDS(file.path(rundir, "stk.rds"))
+
 data_a4a <- readRDS(file.path(rundir, "data.rds"))
 
 # get a4a results
@@ -21,9 +23,14 @@ parameters_old <- list(a_old = 0, b_old = 0, logSigma_old = 0)
 aux <- data_a4a$obs[c("year", "fleet", "age")]
 aux <- as.matrix(aux)
 
+getMat <- function(what) {
+  mat <- data_a4a$aux[[what]]
+  mat <- matrix(mat, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1)
+  exp(t(mat))
+}
 
 data_new <- list(
-  obs = data_a4a$obs$observation,
+  logObs = data_a4a$obs$observation,
   aux = as.matrix(data_a4a$obs[1:3]),
   minYear = data_a4a$years[1],
   minAge = data_a4a$ages[1],
@@ -32,12 +39,21 @@ data_new <- list(
   surveyMaxAges = data_a4a$survey_maxages,
   fleetTypes = c(1, rep(2, length(data_a4a$survey_minages))),
   sampleTimes = data_a4a$survey_times,
-  M = exp(t(matrix(data_a4a$aux$m, nrow = diff(data_a4a$ages) + 1, ncol = diff(data_a4a$years) + 1))),
+  M = unname(t(m(stk$stk)[, , drop = TRUE])),
+  SW = unname(t(stock.wt(stk$stk)[, , drop = TRUE])),
+  MO = unname(t(mat(stk$stk)[, , drop = TRUE])),
+  PF = unname(t(harvest.spwn(stk$stk)[, , drop = TRUE])),
+  PM = unname(t(m.spwn(stk$stk)[, , drop = TRUE])),
   designF = Xs$fmodel,
   designQ = Xs$qmodel,
   designN1 = Xs$n1model,
   designR = Xs$rmodel,
-  designV = Xs$vmodel
+  designV = Xs$vmodel,
+  designRa = data_a4a$srmodel$Xa,
+  designRb = data_a4a$srmodel$Xb,
+  RmodelId = data_a4a$srmodel$id,
+  srCV = data_a4a$srmodel$cv,
+  spr0 = 0
 )
 
 # set up pars
@@ -46,6 +62,8 @@ pars <- coef(fit)$stkmodel[drop = TRUE]
 fpars <- pars[grepl("fMod", names(pars))]
 n1pars <- pars[grepl("n1Mod", names(pars))]
 rpars <- pars[grepl("rMod", names(pars))]
+rapars <- pars[grepl("raMod", names(pars))]
+rbpars <- pars[grepl("rbMod", names(pars))]
 qpars <-
   unlist(
     unname(
@@ -62,14 +80,16 @@ parameters_new <- list(
   Qpar = unname(qpars),
   N1par = unname(n1pars),
   Rpar = unname(rpars),
-  Vpar = unname(vpars)
+  Vpar = unname(vpars),
+  Rapar = unname(rapars),
+  Rbpar = unname(rbpars)
 )
 
 
 #data <- c(data_old, data_new)
 #parameters <- c(parameters_new, parameters_old)
 data <- data_new
-#parameters <- parameters_new
+parameters <- parameters_new
 parameters <- lapply(parameters_new, function(x) rep(0, length(x)))
 
 # compile and load
@@ -84,16 +104,23 @@ obj <-
     silent = FALSE
   )
 
-# obj$fn()
+obj$fn()
 
-opt <-
-  nlminb(
-    obj$par, obj$fn, obj$gr,
-    control = list(eval.max = 10000, iter.max = 10000)
-  )
+obj$report()$ssb
 
-obj$report()$jnll
-obj$report()$nllpart
+if (FALSE) {
+  opt <-
+    nlminb(
+      obj$par, obj$fn, obj$gr,
+      control = list(eval.max = 10000, iter.max = 10000)
+    )
+}
+
+rbind(
+  fitSumm(fit)[grep("nlogl", dimnames(fitSumm(fit))[[1]]), ],
+  c(obj$report()$jnll, obj$report()$nllpart)
+)
+
 
 if (FALSE) {
 obj$report()$logF
@@ -109,7 +136,7 @@ obj$report()$logV[3, 1:2, ]
 obj$report()$jnll
 }
 
-plot(obj$report()$logPred, data$obs)
+# plot(obj$report()$logPred, data$logObs)
 
 checks <-
   list(
@@ -140,15 +167,6 @@ checks <-
           obj$report()$logV[3, , ]
         ) - v.out
       ),
-    check_hand_ll =
-          sum(
-            dnorm(
-              data$obs,
-              obj$report()$logPred,
-              obj$report()$logObsSd,
-              log = TRUE
-            )
-          ) -logLik(fit),
     check_tmb_ll = -obj$report()$jnll - logLik(fit),
     check_jnll = fitSumm(fit)[grep("nlogl", dimnames(fitSumm(fit))[[1]]), ] - c(obj$report()$jnll, obj$report()$nllpart)
   )
